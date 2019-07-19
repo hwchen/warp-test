@@ -1,4 +1,14 @@
-use warp::{path, Filter};
+use warp::{
+    http::{
+        status,
+        Response,
+    },
+    path,
+    Filter,
+    Rejection,
+};
+use std::error::Error as StdError;
+use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
@@ -45,6 +55,17 @@ fn main() {
                 format,
                 schema,
                 )
+        })
+        .recover(|err: Rejection| {
+            println!("cause {:?}", err);
+            if let Some(e) = err.find_cause::<Error>() {
+                Ok(Response::builder()
+                   .status(status::StatusCode::from_u16(404).unwrap())
+                   .body(e.to_string())
+                )
+            } else {
+                Err(err)
+            }
         });
 
     let routes = root
@@ -61,19 +82,22 @@ pub struct AggregateRoute {
 }
 
 impl FromStr for AggregateRoute {
-    type Err = ();
+    type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, ()> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut agg_and_fmt = s.split('.');
 
         if let Some(agg) = agg_and_fmt.next() {
             if agg != "aggregate" {
-                return Err(());
+                return Err(Error { msg: "".into() });
             }
         }
 
         let fmt = if let Some(fmt) = agg_and_fmt.next() {
-            fmt.parse()?
+            fmt.parse()
+                .map_err(|e| Error {
+                    msg: format!("{}", e),
+                })?
         } else {
             FormatType::default()
         };
@@ -91,13 +115,13 @@ pub enum FormatType {
 }
 
 impl FromStr for FormatType {
-    type Err = ();
+    type Err = String;
 
-    fn from_str(s: &str) -> Result<Self, ()> {
+    fn from_str(s: &str) -> Result<Self, String> {
         match s {
             "csv" => Ok(FormatType::Csv),
             "jsonrecords" => Ok(FormatType::JsonRecords),
-            _ => Err(())
+            _ => Err(format!("{} not supported", s))
         }
     }
 }
@@ -117,3 +141,15 @@ impl Schema {
     }
 }
 
+#[derive(Debug)]
+pub struct Error {
+    msg: String,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.msg)
+    }
+}
+
+impl StdError for Error {}
