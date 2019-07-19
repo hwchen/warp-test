@@ -1,7 +1,14 @@
 use warp::{path, Filter};
 use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 
 fn main() {
+    // set up state
+    // use a Filter to be able to easily combine with others.
+    let schema = Arc::new(RwLock::new(Schema::new()));
+    let schema = warp::any().map(move || schema.clone());
+
+    // ====================================================
     // declare routes
 
     // GET /
@@ -16,15 +23,28 @@ fn main() {
     // GET /cubes/<cube_name>
     let cube = path!("cubes" / String)
         .and(warp::path::end())
-        .map(|cube_name| {
-            format!("metadata for {}", cube_name)
+        .and(schema.clone())
+        .map(|cube_name, schema: Arc<RwLock<Schema>>| {
+            let schema = schema.read().unwrap();
+
+            format!("metadata for {}, schema {:?}",
+                    cube_name,
+                    schema,
+                    )
         });
 
     // GET /cubes/<cube_name>/aggregate<.fmt>
     let aggregate = path!("cubes" / String / AggregateRoute)
         .and(warp::path::end())
-        .map(|cube_name, format| {
-            format!("aggregate for {}, {:?}", cube_name, format)
+        .and(schema.clone())
+        .map(|cube_name, format, schema: Arc<RwLock<Schema>>| {
+            let schema = schema.read().unwrap();
+
+            format!("aggregate for {}, {:?}; schema {:?}",
+                cube_name,
+                format,
+                schema,
+                )
         });
 
     let routes = root
@@ -87,3 +107,13 @@ impl Default for FormatType {
         FormatType::Csv
     }
 }
+
+#[derive(Debug)]
+pub struct Schema(String);
+
+impl Schema {
+    pub fn new() -> Self{
+        Schema("A Schema".into())
+    }
+}
+
