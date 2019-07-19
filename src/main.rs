@@ -44,7 +44,9 @@ fn main() {
         });
 
     // GET /cubes/<cube_name>/aggregate<.fmt>
-    let aggregate = path!("cubes" / String / AggregateRoute)
+    let aggregate = warp::path("cubes")
+        .and(warp::path::param::<String>())
+        .and(warp::path::param2::<AggregateRoute>())
         .and(warp::path::end())
         .and(schema.clone())
         .map(|cube_name, format, schema: Arc<RwLock<Schema>>| {
@@ -121,7 +123,7 @@ impl FromStr for FormatType {
         match s {
             "csv" => Ok(FormatType::Csv),
             "jsonrecords" => Ok(FormatType::JsonRecords),
-            _ => Err(format!("{} not supported", s))
+            _ => Err(format!("format {:?} not supported", s))
         }
     }
 }
