@@ -1,3 +1,9 @@
+use log::debug;
+use pretty_env_logger;
+use std::error::Error as StdError;
+use std::fmt::{self, Display};
+use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 use warp::{
     http::{
         status,
@@ -7,12 +13,10 @@ use warp::{
     Filter,
     Rejection,
 };
-use std::error::Error as StdError;
-use std::fmt::{self, Display};
-use std::str::FromStr;
-use std::sync::{Arc, RwLock};
 
 fn main() {
+    pretty_env_logger::init();
+
     // set up state
     // use a Filter to be able to easily combine with others.
     let schema = Arc::new(RwLock::new(Schema::new()));
@@ -59,8 +63,8 @@ fn main() {
                 )
         })
         .recover(|err: Rejection| {
-            println!("cause {:?}", err);
             if let Some(e) = err.find_cause::<Error>() {
+                debug!("Error: {}", e);
                 Ok(Response::builder()
                    .status(status::StatusCode::from_u16(404).unwrap())
                    .body(e.to_string())
@@ -73,7 +77,8 @@ fn main() {
     let routes = root
         .or(cubes)
         .or(cube)
-        .or(aggregate);
+        .or(aggregate)
+        .with(warp::log("warp-test"));
 
     warp::serve(routes).run(([127,0,0,1], 3030));
 }
