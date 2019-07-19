@@ -1216,6 +1216,7 @@ version = "0.1.0"
 dependencies = [
  "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_env_logger 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "warp 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

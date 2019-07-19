@@ -1,9 +1,11 @@
-use log::debug;
+use log::{debug, error};
 use pretty_env_logger;
 use std::error::Error as StdError;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
+use tokio::timer::Delay;
 use warp::{
     http::{
         status,
@@ -11,6 +13,7 @@ use warp::{
     },
     path,
     Filter,
+    Future,
     Rejection,
 };
 
@@ -53,14 +56,21 @@ fn main() {
         .and(warp::path::param2::<AggregateRoute>())
         .and(warp::path::end())
         .and(schema.clone())
-        .map(|cube_name, format, schema: Arc<RwLock<Schema>>| {
-            let schema = schema.read().unwrap();
+        .and_then(|cube_name, format, schema: Arc<RwLock<Schema>>| {
+            Delay::new(Instant::now() + Duration::from_secs(2))
+                .map(move|()| {
+                    let schema = schema.read().unwrap();
 
-            format!("aggregate for {}, {:?}; schema {:?}",
-                cube_name,
-                format,
-                schema,
-                )
+                    format!("agg for {}, {:?}; schema {:?}",
+                        cube_name,
+                        format,
+                        schema,
+                        )
+                })
+                .map_err(|timer_err| {
+                    error!("timer error: {}", timer_err);
+                    warp::reject::custom(timer_err)
+                })
         })
         .recover(|err: Rejection| {
             if let Some(e) = err.find_cause::<Error>() {
