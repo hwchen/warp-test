@@ -1,3 +1,4 @@
+use futures_util::future;
 use log::{debug, error};
 use pretty_env_logger;
 use std::error::Error as StdError;
@@ -5,7 +6,7 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use tokio::timer::Delay;
+use tokio::timer::delay;
 use warp::{
     http::{
         status,
@@ -13,11 +14,11 @@ use warp::{
     },
     path,
     Filter,
-    Future,
     Rejection,
 };
 
-fn main() {
+#[tokio::main]
+async fn main() {
     pretty_env_logger::init();
 
     // set up state
@@ -53,35 +54,23 @@ fn main() {
     // GET /cubes/<cube_name>/aggregate<.fmt>
     let aggregate = warp::path("cubes")
         .and(warp::path::param::<String>())
-        .and(warp::path::param2::<AggregateRoute>())
+        .and(warp::path::param_with_err::<AggregateRoute>())
         .and(warp::path::end())
         .and(schema.clone())
-        .and_then(|cube_name, format, schema: Arc<RwLock<Schema>>| {
-            Delay::new(Instant::now() + Duration::from_secs(2))
-                .map(move|()| {
-                    let schema = schema.read().unwrap();
-
-                    format!("agg for {}, {:?}; schema {:?}",
-                        cube_name,
-                        format,
-                        schema,
-                        )
-                })
-                .map_err(|timer_err| {
-                    error!("timer error: {}", timer_err);
-                    warp::reject::custom(timer_err)
-                })
-        })
+        .and_then(handle_aggregate)
         .recover(|err: Rejection| {
-            if let Some(e) = err.find_cause::<Error>() {
-                debug!("Error: {}", e);
-                Ok(Response::builder()
-                   .status(status::StatusCode::from_u16(404).unwrap())
-                   .body(e.to_string())
-                )
-            } else {
-                Err(err)
-            }
+            let err = {
+                if let Some(e) = err.find_cause::<Error>() {
+                    error!("Error: {}", e);
+                    Ok(Response::builder()
+                    .status(status::StatusCode::from_u16(404).unwrap())
+                    .body(e.to_string())
+                    )
+                } else {
+                    Err(err)
+                }
+            };
+            future::ready(err)
         });
 
     let routes = root
@@ -90,7 +79,23 @@ fn main() {
         .or(aggregate)
         .with(warp::log("warp-test"));
 
-    warp::serve(routes).run(([127,0,0,1], 3030));
+    warp::serve(routes).run(([127,0,0,1], 3030)).await;
+}
+
+async fn handle_aggregate(cube_name: String, agg: AggregateRoute, schema: Arc<RwLock<Schema>>) -> Result<impl warp::Reply, warp::Rejection> {
+    delay(Instant::now() + Duration::from_secs(2))
+        .await;
+
+    let schema = schema.read().unwrap();
+
+    let res = format!("agg for {}, {:?}; schema {:?}",
+        cube_name,
+        agg,
+        schema,
+    );
+    debug!("{}", res);
+
+    Ok(res)
 }
 
 #[derive(Debug)]
@@ -170,3 +175,9 @@ impl Display for Error {
 }
 
 impl StdError for Error {}
+
+impl From<Error> for Rejection {
+    fn from(err: Error) -> Rejection {
+        warp::reject::custom(err)
+    }
+}
