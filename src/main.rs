@@ -176,8 +176,3 @@ impl Display for Error {
 
 impl StdError for Error {}
 
-impl From<Error> for Rejection {
-    fn from(err: Error) -> Rejection {
-        warp::reject::custom(err)
-    }
-}
