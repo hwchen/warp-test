@@ -60,7 +60,7 @@ async fn main() {
         .and_then(handle_aggregate)
         .recover(|err: Rejection| {
             let err = {
-                if let Some(e) = err.find_cause::<Error>() {
+                if let Some(e) = err.find::<Error>() {
                     error!("Error: {}", e);
                     Ok(Response::builder()
                     .status(status::StatusCode::from_u16(404).unwrap())
@@ -175,4 +175,5 @@ impl Display for Error {
 }
 
 impl StdError for Error {}
+impl warp::reject::Reject for Error {}
 
