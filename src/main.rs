@@ -5,8 +5,8 @@ use std::error::Error as StdError;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
-use tokio::timer::delay;
+use std::time::Duration;
+use tokio::time::delay_for;
 use warp::{
     http::{
         status,
@@ -54,7 +54,7 @@ async fn main() {
     // GET /cubes/<cube_name>/aggregate<.fmt>
     let aggregate = warp::path("cubes")
         .and(warp::path::param::<String>())
-        .and(warp::path::param_with_err::<AggregateRoute>())
+        .and(warp::path::param::<AggregateRoute>()) // want _param_with_err, but it's in PR right now
         .and(warp::path::end())
         .and(schema.clone())
         .and_then(handle_aggregate)
@@ -83,7 +83,7 @@ async fn main() {
 }
 
 async fn handle_aggregate(cube_name: String, agg: AggregateRoute, schema: Arc<RwLock<Schema>>) -> Result<impl warp::Reply, warp::Rejection> {
-    delay(Instant::now() + Duration::from_secs(2))
+    delay_for(Duration::from_secs(2))
         .await;
 
     let schema = schema.read().unwrap();
